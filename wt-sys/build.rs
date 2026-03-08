@@ -5,10 +5,22 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const WIREDTIGER_ROOT: &str = "/Users/mark/wt/wiredtiger";
-const FILELIST_PATH: &str = "/Users/mark/wt/wiredtiger/dist/filelist";
-const CONFIG_TEMPLATE_PATH: &str = "/Users/mark/wt/wiredtiger/cmake/configs/wiredtiger_config.h.in";
-const WIREDTIGER_H_TEMPLATE_PATH: &str = "/Users/mark/wt/wiredtiger/src/include/wiredtiger.h.in";
+/// Get the path to the WiredTiger source directory (git submodule at wt-sys/src/wiredtiger)
+fn wiredtiger_root() -> PathBuf {
+    PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("src/wiredtiger")
+}
+
+fn filelist_path() -> PathBuf {
+    wiredtiger_root().join("dist/filelist")
+}
+
+fn config_template_path() -> PathBuf {
+    wiredtiger_root().join("cmake/configs/wiredtiger_config.h.in")
+}
+
+fn wiredtiger_h_template_path() -> PathBuf {
+    wiredtiger_root().join("src/include/wiredtiger.h.in")
+}
 
 // Version info
 const VERSION_MAJOR: &str = "12";
@@ -74,9 +86,14 @@ fn should_include_file(filter: &str, arch_filter: &str, os_filter: &str, is_posi
 }
 
 /// Parse the filelist and return a list of source files applicable to the current platform
-fn parse_filelist(filelist_path: &str) -> Result<Vec<String>, String> {
-    let content = fs::read_to_string(filelist_path)
-        .map_err(|e| format!("Failed to read filelist '{}': {}", filelist_path, e))?;
+fn parse_filelist(filelist_path: &Path, wt_root: &Path) -> Result<Vec<PathBuf>, String> {
+    let content = fs::read_to_string(filelist_path).map_err(|e| {
+        format!(
+            "Failed to read filelist '{}': {}",
+            filelist_path.display(),
+            e
+        )
+    })?;
 
     let arch_filter = get_arch_filter();
     let os_filter = get_os_filter();
@@ -108,7 +125,7 @@ fn parse_filelist(filelist_path: &str) -> Result<Vec<String>, String> {
 
         // Check if this file should be included based on the filter
         if should_include_file(filter, arch_filter, os_filter, posix) {
-            let full_path = format!("{}/{}", WIREDTIGER_ROOT, file_path);
+            let full_path = wt_root.join(file_path);
             files.push(full_path);
         }
     }
@@ -255,9 +272,14 @@ fn process_cmakedefine(line: &str, features: &HashMap<&str, bool>) -> String {
 }
 
 /// Generate wiredtiger_config.h from the template
-fn generate_config(template_path: &str, output_path: &Path) -> Result<(), String> {
-    let content = fs::read_to_string(template_path)
-        .map_err(|e| format!("Failed to read config template '{}': {}", template_path, e))?;
+fn generate_config(template_path: &Path, output_path: &Path) -> Result<(), String> {
+    let content = fs::read_to_string(template_path).map_err(|e| {
+        format!(
+            "Failed to read config template '{}': {}",
+            template_path.display(),
+            e
+        )
+    })?;
 
     let features = get_enabled_features();
     let spinlock_type = get_spinlock_type();
@@ -293,11 +315,12 @@ fn generate_config(template_path: &str, output_path: &Path) -> Result<(), String
 }
 
 /// Generate wiredtiger.h from the template
-fn generate_wiredtiger_h(template_path: &str, output_path: &Path) -> Result<(), String> {
+fn generate_wiredtiger_h(template_path: &Path, output_path: &Path) -> Result<(), String> {
     let content = fs::read_to_string(template_path).map_err(|e| {
         format!(
             "Failed to read wiredtiger.h template '{}': {}",
-            template_path, e
+            template_path.display(),
+            e
         )
     })?;
 
@@ -343,23 +366,27 @@ fn gen_bindings(wiredtiger_h_output: &str) {
 }
 
 fn main() {
-    // Get OUT_DIR for generated files
+    // Get paths
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));
+    let wt_root = wiredtiger_root();
+    let filelist = filelist_path();
+    let config_template = config_template_path();
+    let wt_h_template = wiredtiger_h_template_path();
 
     // Generate wiredtiger_config.h
     let config_output = out_dir.join("wiredtiger_config.h");
-    generate_config(CONFIG_TEMPLATE_PATH, &config_output)
+    generate_config(&config_template, &config_output)
         .expect("Failed to generate wiredtiger_config.h");
 
     // Generate wiredtiger.h
     let wiredtiger_h_output = out_dir.join("wiredtiger.h");
-    generate_wiredtiger_h(WIREDTIGER_H_TEMPLATE_PATH, &wiredtiger_h_output)
+    generate_wiredtiger_h(&wt_h_template, &wiredtiger_h_output)
         .expect("Failed to generate wiredtiger.h");
 
     gen_bindings(wiredtiger_h_output.as_path().to_str().unwrap());
 
     // Parse the filelist
-    let files = parse_filelist(FILELIST_PATH).expect("Failed to parse WiredTiger filelist");
+    let files = parse_filelist(&filelist, &wt_root).expect("Failed to parse WiredTiger filelist");
 
     if files.is_empty() {
         panic!("No source files found in filelist");
@@ -368,21 +395,27 @@ fn main() {
     // Build the WiredTiger library
     let mut build = cc::Build::new();
 
+    // TODO - use build.flag_if_supported
     build.flags(["-Wno-unused-function"]);
 
     // Add include paths
     build.include(&out_dir); // For generated wiredtiger_config.h
-    build.include(format!("{}/src/include", WIREDTIGER_ROOT));
+    build.include(wt_root.join("src/include"));
 
-    // TODO - check if apple
-    build.include(format!("{}/oss/apple", WIREDTIGER_ROOT));
+    let os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+
+    let is_darwin = os == "macos" || os == "ios";
+
+    if is_darwin {
+        build.include(wt_root.join("oss/apple"));
+    }
 
     // Add all source files
     for file in &files {
-        if Path::new(file).exists() {
+        if file.exists() {
             build.file(file);
         } else {
-            eprintln!("Warning: Source file not found: {}", file);
+            eprintln!("Warning: Source file not found: {}", file.display());
         }
     }
 
@@ -390,7 +423,7 @@ fn main() {
     build.compile("wt");
 
     // Tell cargo to rerun the build script if these files change
-    println!("cargo:rerun-if-changed={}", FILELIST_PATH);
-    println!("cargo:rerun-if-changed={}", CONFIG_TEMPLATE_PATH);
-    println!("cargo:rerun-if-changed={}", WIREDTIGER_H_TEMPLATE_PATH);
+    println!("cargo:rerun-if-changed={}", filelist.display());
+    println!("cargo:rerun-if-changed={}", config_template.display());
+    println!("cargo:rerun-if-changed={}", wt_h_template.display());
 }
