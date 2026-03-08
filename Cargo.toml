@@ -4,4 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-cc = "1.2.52"
+wt-sys = { path = "wt-sys" }
+
+[workspace]
+members = ["wt-sys"]
