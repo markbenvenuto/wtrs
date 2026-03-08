@@ -523,6 +523,100 @@ impl Connection {
     pub unsafe fn as_raw(&self) -> *mut wt_sys::WT_CONNECTION {
         self.inner
     }
+
+    /// Add a page log service implementation.
+    ///
+    /// # Safety
+    /// The `page_log` pointer must point to a valid WT_PAGE_LOG structure that remains
+    /// valid for the lifetime of the connection.
+    pub unsafe fn add_page_log(
+        &self,
+        name: &str,
+        page_log: *mut wt_sys::WT_PAGE_LOG,
+        config: Option<&str>,
+    ) -> Result<()> {
+        let name_cstr = CString::new(name).map_err(|_| Error {
+            code: -1,
+            message: "Name contains null byte".to_string(),
+        })?;
+        let config_cstr = config_to_cstring(config)?;
+
+        let ret = unsafe {
+            let conn = &*self.inner;
+            match conn.add_page_log {
+                Some(f) => f(self.inner, name_cstr.as_ptr(), page_log, config_ptr(&config_cstr)),
+                None => return Err(Error {
+                    code: -1,
+                    message: "add_page_log function not available".to_string(),
+                }),
+            }
+        };
+
+        check_error(ret)
+    }
+
+    /// Get a page log service implementation by name.
+    ///
+    /// Look up a page log service by name and return it. The returned page log service
+    /// must be released by calling WT_PAGE_LOG::terminate.
+    pub fn get_page_log(&self, name: &str) -> Result<PageLog> {
+        let name_cstr = CString::new(name).map_err(|_| Error {
+            code: -1,
+            message: "Name contains null byte".to_string(),
+        })?;
+
+        let mut page_log: *mut wt_sys::WT_PAGE_LOG = ptr::null_mut();
+
+        let ret = unsafe {
+            let conn = &*self.inner;
+            match conn.get_page_log {
+                Some(f) => f(self.inner, name_cstr.as_ptr(), &mut page_log),
+                None => return Err(Error {
+                    code: -1,
+                    message: "get_page_log function not available".to_string(),
+                }),
+            }
+        };
+
+        check_error(ret)?;
+
+        if page_log.is_null() {
+            return Err(Error {
+                code: -1,
+                message: "get_page_log returned null".to_string(),
+            });
+        }
+
+        Ok(PageLog { inner: page_log })
+    }
+
+    /// Configure a key provider system.
+    ///
+    /// This method can only be called from an early loaded extension module.
+    ///
+    /// # Safety
+    /// The `key_provider` pointer must point to a valid WT_KEY_PROVIDER structure that
+    /// remains valid for the lifetime of the connection.
+    pub unsafe fn set_key_provider(
+        &self,
+        key_provider: *mut wt_sys::WT_KEY_PROVIDER,
+        config: Option<&str>,
+    ) -> Result<()> {
+        let config_cstr = config_to_cstring(config)?;
+
+        let ret = unsafe {
+            let conn = &*self.inner;
+            match conn.set_key_provider {
+                Some(f) => f(self.inner, key_provider, config_ptr(&config_cstr)),
+                None => return Err(Error {
+                    code: -1,
+                    message: "set_key_provider function not available".to_string(),
+                }),
+            }
+        };
+
+        check_error(ret)
+    }
 }
 impl Drop for Connection {
     fn drop(&mut self) {
@@ -536,6 +630,268 @@ impl Drop for Connection {
         }
     }
 }
+
+// ============================================================================
+// PageLog
+// ============================================================================
+
+/// A WiredTiger page log service.
+///
+/// This is a safe wrapper around `WT_PAGE_LOG`. Page log services are used
+/// for custom page logging implementations.
+pub struct PageLog {
+    inner: *mut wt_sys::WT_PAGE_LOG,
+}
+
+// PageLog can be sent between threads
+unsafe impl Send for PageLog {}
+unsafe impl Sync for PageLog {}
+
+impl PageLog {
+    /// Add a reference to the page log service.
+    pub fn add_reference(&self) -> Result<()> {
+        let ret = unsafe {
+            let pl = &*self.inner;
+            match pl.pl_add_reference {
+                Some(f) => f(self.inner),
+                None => return Err(Error {
+                    code: -1,
+                    message: "pl_add_reference function not available".to_string(),
+                }),
+            }
+        };
+
+        check_error(ret)
+    }
+
+    /// Abandon an incomplete checkpoint.
+    pub fn abandon_checkpoint(&self, session: &Session) -> Result<()> {
+        let ret = unsafe {
+            let pl = &*self.inner;
+            match pl.pl_abandon_checkpoint {
+                Some(f) => f(self.inner, session.inner),
+                None => return Err(Error {
+                    code: -1,
+                    message: "pl_abandon_checkpoint function not available".to_string(),
+                }),
+            }
+        };
+
+        check_error(ret)
+    }
+
+    /// Begin checkpointing using the given checkpoint_id.
+    pub fn begin_checkpoint(&self, session: &Session, checkpoint_id: u64) -> Result<()> {
+        let ret = unsafe {
+            let pl = &*self.inner;
+            match pl.pl_begin_checkpoint {
+                Some(f) => f(self.inner, session.inner, checkpoint_id),
+                None => return Err(Error {
+                    code: -1,
+                    message: "pl_begin_checkpoint function not available".to_string(),
+                }),
+            }
+        };
+
+        check_error(ret)
+    }
+
+    /// Complete checkpointing using the given checkpoint_id.
+    pub fn complete_checkpoint(&self, session: &Session, checkpoint_id: u64) -> Result<()> {
+        let ret = unsafe {
+            let pl = &*self.inner;
+            match pl.pl_complete_checkpoint {
+                Some(f) => f(self.inner, session.inner, checkpoint_id),
+                None => return Err(Error {
+                    code: -1,
+                    message: "pl_complete_checkpoint function not available".to_string(),
+                }),
+            }
+        };
+
+        check_error(ret)
+    }
+
+    /// Get the most recent completed checkpoint number.
+    pub fn get_complete_checkpoint(&self, session: &Session) -> Result<u64> {
+        let mut checkpoint_id: u64 = 0;
+
+        let ret = unsafe {
+            let pl = &*self.inner;
+            match pl.pl_get_complete_checkpoint {
+                Some(f) => f(self.inner, session.inner, &mut checkpoint_id),
+                None => return Err(Error {
+                    code: -1,
+                    message: "pl_get_complete_checkpoint function not available".to_string(),
+                }),
+            }
+        };
+
+        check_error(ret)?;
+        Ok(checkpoint_id)
+    }
+
+    /// Get the most recently opened checkpoint number.
+    pub fn get_open_checkpoint(&self, session: &Session) -> Result<u64> {
+        let mut checkpoint_id: u64 = 0;
+
+        let ret = unsafe {
+            let pl = &*self.inner;
+            match pl.pl_get_open_checkpoint {
+                Some(f) => f(self.inner, session.inner, &mut checkpoint_id),
+                None => return Err(Error {
+                    code: -1,
+                    message: "pl_get_open_checkpoint function not available".to_string(),
+                }),
+            }
+        };
+
+        check_error(ret)?;
+        Ok(checkpoint_id)
+    }
+
+    /// Get the last written page LSN.
+    pub fn get_last_lsn(&self, session: &Session) -> Result<u64> {
+        let mut lsn: u64 = 0;
+
+        let ret = unsafe {
+            let pl = &*self.inner;
+            match pl.pl_get_last_lsn {
+                Some(f) => f(self.inner, session.inner, &mut lsn),
+                None => return Err(Error {
+                    code: -1,
+                    message: "pl_get_last_lsn function not available".to_string(),
+                }),
+            }
+        };
+
+        check_error(ret)?;
+        Ok(lsn)
+    }
+
+    /// Set the last materialized LSN.
+    pub fn set_last_materialized_lsn(&self, session: &Session, lsn: u64) -> Result<()> {
+        let ret = unsafe {
+            let pl = &*self.inner;
+            match pl.pl_set_last_materialized_lsn {
+                Some(f) => f(self.inner, session.inner, lsn),
+                None => return Err(Error {
+                    code: -1,
+                    message: "pl_set_last_materialized_lsn function not available".to_string(),
+                }),
+            }
+        };
+
+        check_error(ret)
+    }
+
+    /// Open a handle for further operations on a table.
+    pub fn open_handle(&self, session: &Session, table_id: u64) -> Result<PageLogHandle> {
+        let mut handle: *mut wt_sys::WT_PAGE_LOG_HANDLE = ptr::null_mut();
+
+        let ret = unsafe {
+            let pl = &*self.inner;
+            match pl.pl_open_handle {
+                Some(f) => f(self.inner, session.inner, table_id, &mut handle),
+                None => return Err(Error {
+                    code: -1,
+                    message: "pl_open_handle function not available".to_string(),
+                }),
+            }
+        };
+
+        check_error(ret)?;
+
+        if handle.is_null() {
+            return Err(Error {
+                code: -1,
+                message: "pl_open_handle returned null".to_string(),
+            });
+        }
+
+        Ok(PageLogHandle { inner: handle })
+    }
+
+    /// Discard a table from the paging/logging service.
+    pub fn trim_table(&self, session: &Session, table_id: u64, start_lsn: u64) -> Result<u64> {
+        let mut lsn: u64 = 0;
+
+        let ret = unsafe {
+            let pl = &*self.inner;
+            match pl.pl_trim_table {
+                Some(f) => f(self.inner, session.inner, table_id, start_lsn, &mut lsn),
+                None => return Err(Error {
+                    code: -1,
+                    message: "pl_trim_table function not available".to_string(),
+                }),
+            }
+        };
+
+        check_error(ret)?;
+        Ok(lsn)
+    }
+
+    /// Terminate and release the page log service.
+    pub fn terminate(self, session: &Session) -> Result<()> {
+        let ret = unsafe {
+            let pl = &*self.inner;
+            match pl.terminate {
+                Some(f) => f(self.inner, session.inner),
+                None => {
+                    // No terminate function, just forget
+                    std::mem::forget(self);
+                    return Ok(());
+                }
+            }
+        };
+
+        std::mem::forget(self);
+        check_error(ret)
+    }
+
+    /// Get the raw WT_PAGE_LOG pointer.
+    pub unsafe fn as_raw(&self) -> *mut wt_sys::WT_PAGE_LOG {
+        self.inner
+    }
+}
+
+// ============================================================================
+// PageLogHandle
+// ============================================================================
+
+/// A handle for page log operations on a specific table.
+///
+/// This is a safe wrapper around `WT_PAGE_LOG_HANDLE`.
+pub struct PageLogHandle {
+    inner: *mut wt_sys::WT_PAGE_LOG_HANDLE,
+}
+
+unsafe impl Send for PageLogHandle {}
+
+impl PageLogHandle {
+    /// Get the raw WT_PAGE_LOG_HANDLE pointer.
+    pub unsafe fn as_raw(&self) -> *mut wt_sys::WT_PAGE_LOG_HANDLE {
+        self.inner
+    }
+
+    /// Close the page log handle.
+    pub fn close(self, session: &Session) -> Result<()> {
+        let ret = unsafe {
+            let handle = &*self.inner;
+            match handle.plh_close {
+                Some(f) => f(self.inner, session.inner),
+                None => {
+                    std::mem::forget(self);
+                    return Ok(());
+                }
+            }
+        };
+
+        std::mem::forget(self);
+        check_error(ret)
+    }
+}
+
 // ============================================================================
 // Session
 // ============================================================================
