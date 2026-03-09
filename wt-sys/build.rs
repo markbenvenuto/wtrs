@@ -327,9 +327,14 @@ fn generate_wiredtiger_h(template_path: &Path, output_path: &Path) -> Result<(),
     // Perform version substitutions
     let output_content = content
         .replace("@VERSION_MAJOR@", VERSION_MAJOR)
+        // .replace("@VERSION_MAJOR@", "MCB WAS HERE")
         .replace("@VERSION_MINOR@", VERSION_MINOR)
         .replace("@VERSION_PATCH@", VERSION_PATCH)
-        .replace("@VERSION_STRING@", VERSION_STRING);
+        .replace("@VERSION_STRING@", VERSION_STRING)
+        .replace(
+            "#if !defined(SWIG) && !defined(DOXYGEN)",
+            "#if !defined(BINDGEN_FILTER)",
+        );
 
     fs::write(output_path, output_content).map_err(|e| {
         format!(
@@ -353,6 +358,7 @@ fn gen_bindings(wiredtiger_h_output: &str) {
         // Tell cargo to invalidate the built crate whenever any of the
         // included header files changed.
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
+        .clang_arg("-DBINDGEN_FILTER")
         // Finish the builder and generate the bindings.
         .generate()
         // Unwrap the Result and panic on failure.

@@ -544,11 +544,18 @@ impl Connection {
         let ret = unsafe {
             let conn = &*self.inner;
             match conn.add_page_log {
-                Some(f) => f(self.inner, name_cstr.as_ptr(), page_log, config_ptr(&config_cstr)),
-                None => return Err(Error {
-                    code: -1,
-                    message: "add_page_log function not available".to_string(),
-                }),
+                Some(f) => f(
+                    self.inner,
+                    name_cstr.as_ptr(),
+                    page_log,
+                    config_ptr(&config_cstr),
+                ),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "add_page_log function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -571,10 +578,12 @@ impl Connection {
             let conn = &*self.inner;
             match conn.get_page_log {
                 Some(f) => f(self.inner, name_cstr.as_ptr(), &mut page_log),
-                None => return Err(Error {
-                    code: -1,
-                    message: "get_page_log function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "get_page_log function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -608,10 +617,12 @@ impl Connection {
             let conn = &*self.inner;
             match conn.set_key_provider {
                 Some(f) => f(self.inner, key_provider, config_ptr(&config_cstr)),
-                None => return Err(Error {
-                    code: -1,
-                    message: "set_key_provider function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "set_key_provider function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -654,10 +665,12 @@ impl PageLog {
             let pl = &*self.inner;
             match pl.pl_add_reference {
                 Some(f) => f(self.inner),
-                None => return Err(Error {
-                    code: -1,
-                    message: "pl_add_reference function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "pl_add_reference function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -670,10 +683,12 @@ impl PageLog {
             let pl = &*self.inner;
             match pl.pl_abandon_checkpoint {
                 Some(f) => f(self.inner, session.inner),
-                None => return Err(Error {
-                    code: -1,
-                    message: "pl_abandon_checkpoint function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "pl_abandon_checkpoint function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -686,10 +701,12 @@ impl PageLog {
             let pl = &*self.inner;
             match pl.pl_begin_checkpoint {
                 Some(f) => f(self.inner, session.inner, checkpoint_id),
-                None => return Err(Error {
-                    code: -1,
-                    message: "pl_begin_checkpoint function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "pl_begin_checkpoint function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -697,19 +714,38 @@ impl PageLog {
     }
 
     /// Complete checkpointing using the given checkpoint_id.
-    pub fn complete_checkpoint(&self, session: &Session, checkpoint_id: u64) -> Result<()> {
+    ///
+    /// Returns the LSN of the checkpoint completion record.
+    pub fn complete_checkpoint(
+        &self,
+        session: &Session,
+        checkpoint_id: u64,
+        checkpoint_timestamp: u64,
+        checkpoint_oldest_timestamp: u64,
+    ) -> Result<u64> {
+        let mut args = wt_sys::WT_PAGE_LOG_COMPLETE_CHECKPOINT_ARGS {
+            checkpoint_id,
+            checkpoint_timestamp,
+            checkpoint_metadata: ptr::null(),
+            checkpoint_oldest_timestamp,
+            lsn: 0,
+        };
+
         let ret = unsafe {
             let pl = &*self.inner;
             match pl.pl_complete_checkpoint {
-                Some(f) => f(self.inner, session.inner, checkpoint_id),
-                None => return Err(Error {
-                    code: -1,
-                    message: "pl_complete_checkpoint function not available".to_string(),
-                }),
+                Some(f) => f(self.inner, session.inner, &mut args),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "pl_complete_checkpoint function not available".to_string(),
+                    });
+                }
             }
         };
 
-        check_error(ret)
+        check_error(ret)?;
+        Ok(args.lsn)
     }
 
     /// Get the most recent completed checkpoint number.
@@ -720,10 +756,12 @@ impl PageLog {
             let pl = &*self.inner;
             match pl.pl_get_complete_checkpoint {
                 Some(f) => f(self.inner, session.inner, &mut checkpoint_id),
-                None => return Err(Error {
-                    code: -1,
-                    message: "pl_get_complete_checkpoint function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "pl_get_complete_checkpoint function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -739,10 +777,12 @@ impl PageLog {
             let pl = &*self.inner;
             match pl.pl_get_open_checkpoint {
                 Some(f) => f(self.inner, session.inner, &mut checkpoint_id),
-                None => return Err(Error {
-                    code: -1,
-                    message: "pl_get_open_checkpoint function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "pl_get_open_checkpoint function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -758,10 +798,12 @@ impl PageLog {
             let pl = &*self.inner;
             match pl.pl_get_last_lsn {
                 Some(f) => f(self.inner, session.inner, &mut lsn),
-                None => return Err(Error {
-                    code: -1,
-                    message: "pl_get_last_lsn function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "pl_get_last_lsn function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -775,10 +817,12 @@ impl PageLog {
             let pl = &*self.inner;
             match pl.pl_set_last_materialized_lsn {
                 Some(f) => f(self.inner, session.inner, lsn),
-                None => return Err(Error {
-                    code: -1,
-                    message: "pl_set_last_materialized_lsn function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "pl_set_last_materialized_lsn function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -793,10 +837,12 @@ impl PageLog {
             let pl = &*self.inner;
             match pl.pl_open_handle {
                 Some(f) => f(self.inner, session.inner, table_id, &mut handle),
-                None => return Err(Error {
-                    code: -1,
-                    message: "pl_open_handle function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "pl_open_handle function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -820,10 +866,12 @@ impl PageLog {
             let pl = &*self.inner;
             match pl.pl_trim_table {
                 Some(f) => f(self.inner, session.inner, table_id, start_lsn, &mut lsn),
-                None => return Err(Error {
-                    code: -1,
-                    message: "pl_trim_table function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "pl_trim_table function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -981,10 +1029,12 @@ impl<'conn> Session<'conn> {
             let session = &*self.inner;
             match session.create {
                 Some(f) => f(self.inner, name_cstr.as_ptr(), config_ptr(&config_cstr)),
-                None => return Err(Error {
-                    code: -1,
-                    message: "create function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "create function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -1003,10 +1053,12 @@ impl<'conn> Session<'conn> {
             let session = &*self.inner;
             match session.drop {
                 Some(f) => f(self.inner, name_cstr.as_ptr(), config_ptr(&config_cstr)),
-                None => return Err(Error {
-                    code: -1,
-                    message: "drop function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "drop function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -1025,10 +1077,12 @@ impl<'conn> Session<'conn> {
             let session = &*self.inner;
             match session.alter {
                 Some(f) => f(self.inner, name_cstr.as_ptr(), config_ptr(&config_cstr)),
-                None => return Err(Error {
-                    code: -1,
-                    message: "alter function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "alter function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -1047,10 +1101,12 @@ impl<'conn> Session<'conn> {
             let session = &*self.inner;
             match session.compact {
                 Some(f) => f(self.inner, name_cstr.as_ptr(), config_ptr(&config_cstr)),
-                None => return Err(Error {
-                    code: -1,
-                    message: "compact function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "compact function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -1069,10 +1125,12 @@ impl<'conn> Session<'conn> {
             let session = &*self.inner;
             match session.salvage {
                 Some(f) => f(self.inner, name_cstr.as_ptr(), config_ptr(&config_cstr)),
-                None => return Err(Error {
-                    code: -1,
-                    message: "salvage function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "salvage function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -1091,10 +1149,12 @@ impl<'conn> Session<'conn> {
             let session = &*self.inner;
             match session.verify {
                 Some(f) => f(self.inner, name_cstr.as_ptr(), config_ptr(&config_cstr)),
-                None => return Err(Error {
-                    code: -1,
-                    message: "verify function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "verify function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -1123,15 +1183,20 @@ impl<'conn> Session<'conn> {
             match session.truncate {
                 Some(f) => f(
                     self.inner,
-                    name_cstr.as_ref().map(|c| c.as_ptr()).unwrap_or(ptr::null()),
+                    name_cstr
+                        .as_ref()
+                        .map(|c| c.as_ptr())
+                        .unwrap_or(ptr::null()),
                     start.map(|c| c.inner).unwrap_or(ptr::null_mut()),
                     stop.map(|c| c.inner).unwrap_or(ptr::null_mut()),
                     config_ptr(&config_cstr),
                 ),
-                None => return Err(Error {
-                    code: -1,
-                    message: "truncate function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "truncate function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -1146,10 +1211,12 @@ impl<'conn> Session<'conn> {
             let session = &*self.inner;
             match session.begin_transaction {
                 Some(f) => f(self.inner, config_ptr(&config_cstr)),
-                None => return Err(Error {
-                    code: -1,
-                    message: "begin_transaction function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "begin_transaction function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -1164,10 +1231,12 @@ impl<'conn> Session<'conn> {
             let session = &*self.inner;
             match session.commit_transaction {
                 Some(f) => f(self.inner, config_ptr(&config_cstr)),
-                None => return Err(Error {
-                    code: -1,
-                    message: "commit_transaction function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "commit_transaction function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -1182,10 +1251,12 @@ impl<'conn> Session<'conn> {
             let session = &*self.inner;
             match session.prepare_transaction {
                 Some(f) => f(self.inner, config_ptr(&config_cstr)),
-                None => return Err(Error {
-                    code: -1,
-                    message: "prepare_transaction function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "prepare_transaction function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -1200,10 +1271,12 @@ impl<'conn> Session<'conn> {
             let session = &*self.inner;
             match session.rollback_transaction {
                 Some(f) => f(self.inner, config_ptr(&config_cstr)),
-                None => return Err(Error {
-                    code: -1,
-                    message: "rollback_transaction function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "rollback_transaction function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -1219,10 +1292,12 @@ impl<'conn> Session<'conn> {
             let session = &*self.inner;
             match session.query_timestamp {
                 Some(f) => f(self.inner, buf.as_mut_ptr(), config_ptr(&config_cstr)),
-                None => return Err(Error {
-                    code: -1,
-                    message: "query_timestamp function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "query_timestamp function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -1242,10 +1317,12 @@ impl<'conn> Session<'conn> {
             let session = &*self.inner;
             match session.timestamp_transaction {
                 Some(f) => f(self.inner, config_cstr.as_ptr()),
-                None => return Err(Error {
-                    code: -1,
-                    message: "timestamp_transaction function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "timestamp_transaction function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -1258,10 +1335,12 @@ impl<'conn> Session<'conn> {
             let session = &*self.inner;
             match session.timestamp_transaction_uint {
                 Some(f) => f(self.inner, which as u32, ts),
-                None => return Err(Error {
-                    code: -1,
-                    message: "timestamp_transaction_uint function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "timestamp_transaction_uint function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -1276,10 +1355,12 @@ impl<'conn> Session<'conn> {
             let session = &*self.inner;
             match session.checkpoint {
                 Some(f) => f(self.inner, config_ptr(&config_cstr)),
-                None => return Err(Error {
-                    code: -1,
-                    message: "checkpoint function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "checkpoint function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -1292,10 +1373,12 @@ impl<'conn> Session<'conn> {
             let session = &*self.inner;
             match session.reset_snapshot {
                 Some(f) => f(self.inner),
-                None => return Err(Error {
-                    code: -1,
-                    message: "reset_snapshot function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "reset_snapshot function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -1308,10 +1391,12 @@ impl<'conn> Session<'conn> {
             let session = &*self.inner;
             match session.reset {
                 Some(f) => f(self.inner),
-                None => return Err(Error {
-                    code: -1,
-                    message: "reset function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "reset function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -1326,10 +1411,12 @@ impl<'conn> Session<'conn> {
             let session = &*self.inner;
             match session.log_flush {
                 Some(f) => f(self.inner, config_ptr(&config_cstr)),
-                None => return Err(Error {
-                    code: -1,
-                    message: "log_flush function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "log_flush function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -1344,10 +1431,12 @@ impl<'conn> Session<'conn> {
             let session = &*self.inner;
             match session.transaction_pinned_range {
                 Some(f) => f(self.inner, &mut range),
-                None => return Err(Error {
-                    code: -1,
-                    message: "transaction_pinned_range function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "transaction_pinned_range function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -1363,10 +1452,12 @@ impl<'conn> Session<'conn> {
             let session = &*self.inner;
             match session.close {
                 Some(f) => f(self.inner, config_ptr(&config_cstr)),
-                None => return Err(Error {
-                    code: -1,
-                    message: "close function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "close function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -1466,7 +1557,10 @@ impl<'session> Cursor<'session> {
         }
     }
 
-    /// Set the key for the next operation (for raw bytes).
+    /// Set the key for the next operation (for raw bytes/u format).
+    ///
+    /// This directly sets the cursor's internal key field for use with
+    /// `key_format=u` tables.
     pub fn set_key_item(&mut self, key: &Item) {
         let raw = key.to_raw();
         unsafe {
@@ -1498,7 +1592,10 @@ impl<'session> Cursor<'session> {
         }
     }
 
-    /// Set the value for the next operation (for raw bytes).
+    /// Set the value for the next operation (for raw bytes/u format).
+    ///
+    /// This directly sets the cursor's internal value field for use with
+    /// `value_format=u` tables.
     pub fn set_value_item(&mut self, value: &Item) {
         let raw = value.to_raw();
         unsafe {
@@ -1530,10 +1627,12 @@ impl<'session> Cursor<'session> {
             let cursor = &*self.inner;
             match cursor.get_raw_key_value {
                 Some(f) => f(self.inner, &mut key_item, &mut value_item),
-                None => return Err(Error {
-                    code: -1,
-                    message: "get_raw_key_value function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "get_raw_key_value function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -1544,16 +1643,78 @@ impl<'session> Cursor<'session> {
         Ok((key, value))
     }
 
+    /// Get the key as a string (for cursors with key_format=S).
+    pub fn get_key_str(&self) -> Result<String> {
+        let mut key_ptr: *const std::os::raw::c_char = ptr::null();
+
+        let ret = unsafe {
+            let cursor = &*self.inner;
+            match cursor.get_key {
+                Some(f) => f(self.inner, &mut key_ptr),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "get_key function not available".to_string(),
+                    });
+                }
+            }
+        };
+
+        check_error(ret)?;
+
+        if key_ptr.is_null() {
+            return Err(Error {
+                code: -1,
+                message: "get_key returned null".to_string(),
+            });
+        }
+
+        let key = unsafe { CStr::from_ptr(key_ptr) };
+        Ok(key.to_string_lossy().into_owned())
+    }
+
+    /// Get the value as a string (for cursors with value_format=S).
+    pub fn get_value_str(&self) -> Result<String> {
+        let mut value_ptr: *const std::os::raw::c_char = ptr::null();
+
+        let ret = unsafe {
+            let cursor = &*self.inner;
+            match cursor.get_value {
+                Some(f) => f(self.inner, &mut value_ptr),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "get_value function not available".to_string(),
+                    });
+                }
+            }
+        };
+
+        check_error(ret)?;
+
+        if value_ptr.is_null() {
+            return Err(Error {
+                code: -1,
+                message: "get_value returned null".to_string(),
+            });
+        }
+
+        let value = unsafe { CStr::from_ptr(value_ptr) };
+        Ok(value.to_string_lossy().into_owned())
+    }
+
     /// Return the next record.
     pub fn next(&mut self) -> Result<()> {
         let ret = unsafe {
             let cursor = &*self.inner;
             match cursor.next {
                 Some(f) => f(self.inner),
-                None => return Err(Error {
-                    code: -1,
-                    message: "next function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "next function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -1566,10 +1727,12 @@ impl<'session> Cursor<'session> {
             let cursor = &*self.inner;
             match cursor.prev {
                 Some(f) => f(self.inner),
-                None => return Err(Error {
-                    code: -1,
-                    message: "prev function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "prev function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -1582,10 +1745,12 @@ impl<'session> Cursor<'session> {
             let cursor = &*self.inner;
             match cursor.reset {
                 Some(f) => f(self.inner),
-                None => return Err(Error {
-                    code: -1,
-                    message: "reset function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "reset function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -1598,10 +1763,12 @@ impl<'session> Cursor<'session> {
             let cursor = &*self.inner;
             match cursor.search {
                 Some(f) => f(self.inner),
-                None => return Err(Error {
-                    code: -1,
-                    message: "search function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "search function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -1617,10 +1784,12 @@ impl<'session> Cursor<'session> {
             let cursor = &*self.inner;
             match cursor.search_near {
                 Some(f) => f(self.inner, &mut exact),
-                None => return Err(Error {
-                    code: -1,
-                    message: "search_near function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "search_near function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -1634,10 +1803,12 @@ impl<'session> Cursor<'session> {
             let cursor = &*self.inner;
             match cursor.insert {
                 Some(f) => f(self.inner),
-                None => return Err(Error {
-                    code: -1,
-                    message: "insert function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "insert function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -1650,10 +1821,12 @@ impl<'session> Cursor<'session> {
             let cursor = &*self.inner;
             match cursor.update {
                 Some(f) => f(self.inner),
-                None => return Err(Error {
-                    code: -1,
-                    message: "update function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "update function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -1666,10 +1839,12 @@ impl<'session> Cursor<'session> {
             let cursor = &*self.inner;
             match cursor.remove {
                 Some(f) => f(self.inner),
-                None => return Err(Error {
-                    code: -1,
-                    message: "remove function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "remove function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -1682,10 +1857,12 @@ impl<'session> Cursor<'session> {
             let cursor = &*self.inner;
             match cursor.reserve {
                 Some(f) => f(self.inner),
-                None => return Err(Error {
-                    code: -1,
-                    message: "reserve function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "reserve function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -1699,11 +1876,17 @@ impl<'session> Cursor<'session> {
         let ret = unsafe {
             let cursor = &*self.inner;
             match cursor.modify {
-                Some(f) => f(self.inner, raw_mods.as_ptr() as *mut _, raw_mods.len() as i32),
-                None => return Err(Error {
-                    code: -1,
-                    message: "modify function not available".to_string(),
-                }),
+                Some(f) => f(
+                    self.inner,
+                    raw_mods.as_ptr() as *mut _,
+                    raw_mods.len() as i32,
+                ),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "modify function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -1719,10 +1902,12 @@ impl<'session> Cursor<'session> {
             let cursor = &*self.inner;
             match cursor.compare {
                 Some(f) => f(self.inner, other.inner, &mut cmp),
-                None => return Err(Error {
-                    code: -1,
-                    message: "compare function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "compare function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -1738,10 +1923,12 @@ impl<'session> Cursor<'session> {
             let cursor = &*self.inner;
             match cursor.equals {
                 Some(f) => f(self.inner, other.inner, &mut equal),
-                None => return Err(Error {
-                    code: -1,
-                    message: "equals function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "equals function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -1755,10 +1942,12 @@ impl<'session> Cursor<'session> {
             let cursor = &*self.inner;
             match cursor.largest_key {
                 Some(f) => f(self.inner),
-                None => return Err(Error {
-                    code: -1,
-                    message: "largest_key function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "largest_key function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -1776,10 +1965,12 @@ impl<'session> Cursor<'session> {
             let cursor = &*self.inner;
             match cursor.reconfigure {
                 Some(f) => f(self.inner, config_cstr.as_ptr()),
-                None => return Err(Error {
-                    code: -1,
-                    message: "reconfigure function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "reconfigure function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -1797,10 +1988,12 @@ impl<'session> Cursor<'session> {
             let cursor = &*self.inner;
             match cursor.bound {
                 Some(f) => f(self.inner, config_cstr.as_ptr()),
-                None => return Err(Error {
-                    code: -1,
-                    message: "bound function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "bound function not available".to_string(),
+                    });
+                }
             }
         };
 
@@ -1813,10 +2006,12 @@ impl<'session> Cursor<'session> {
             let cursor = &*self.inner;
             match cursor.close {
                 Some(f) => f(self.inner),
-                None => return Err(Error {
-                    code: -1,
-                    message: "close function not available".to_string(),
-                }),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "close function not available".to_string(),
+                    });
+                }
             }
         };
 
