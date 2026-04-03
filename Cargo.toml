@@ -7,4 +7,4 @@ edition = "2024"
 wt-sys = { path = "wt-sys" }
 
 [workspace]
-members = ["wt-sys", "ext_crypto"]
+members = ["wt-sys", "ext_crypto", "ext_pali"]

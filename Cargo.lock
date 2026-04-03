@@ -89,6 +89,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ext_pali"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "find-msvc-tools"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
