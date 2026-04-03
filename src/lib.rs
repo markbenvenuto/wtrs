@@ -628,6 +628,88 @@ impl Connection {
 
         check_error(ret)
     }
+
+    /// Add an encryption implementation.
+    ///
+    /// The application must first implement the WT_ENCRYPTOR interface and then register
+    /// the implementation with WiredTiger.
+    ///
+    /// # Safety
+    /// The `encryptor` pointer must point to a valid WT_ENCRYPTOR structure that remains
+    /// valid for the lifetime of the connection.
+    pub unsafe fn add_encryptor(
+        &self,
+        name: &str,
+        encryptor: *mut wt_sys::WT_ENCRYPTOR,
+        config: Option<&str>,
+    ) -> Result<()> {
+        let name_cstr = CString::new(name).map_err(|_| Error {
+            code: -1,
+            message: "Name contains null byte".to_string(),
+        })?;
+        let config_cstr = config_to_cstring(config)?;
+
+        let ret = unsafe {
+            let conn = &*self.inner;
+            match conn.add_encryptor {
+                Some(f) => f(
+                    self.inner,
+                    name_cstr.as_ptr(),
+                    encryptor,
+                    config_ptr(&config_cstr),
+                ),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "add_encryptor function not available".to_string(),
+                    });
+                }
+            }
+        };
+
+        check_error(ret)
+    }
+
+    /// Add a compression implementation.
+    ///
+    /// The application must first implement the WT_COMPRESSOR interface and then register
+    /// the implementation with WiredTiger.
+    ///
+    /// # Safety
+    /// The `compressor` pointer must point to a valid WT_COMPRESSOR structure that remains
+    /// valid for the lifetime of the connection.
+    pub unsafe fn add_compressor(
+        &self,
+        name: &str,
+        compressor: *mut wt_sys::WT_COMPRESSOR,
+        config: Option<&str>,
+    ) -> Result<()> {
+        let name_cstr = CString::new(name).map_err(|_| Error {
+            code: -1,
+            message: "Name contains null byte".to_string(),
+        })?;
+        let config_cstr = config_to_cstring(config)?;
+
+        let ret = unsafe {
+            let conn = &*self.inner;
+            match conn.add_compressor {
+                Some(f) => f(
+                    self.inner,
+                    name_cstr.as_ptr(),
+                    compressor,
+                    config_ptr(&config_cstr),
+                ),
+                None => {
+                    return Err(Error {
+                        code: -1,
+                        message: "add_compressor function not available".to_string(),
+                    });
+                }
+            }
+        };
+
+        check_error(ret)
+    }
 }
 impl Drop for Connection {
     fn drop(&mut self) {
