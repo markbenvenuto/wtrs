@@ -8,10 +8,6 @@ fn wiredtiger_root() -> PathBuf {
     PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("../vendor/wiredtiger")
 }
 
-fn filelist_path() -> PathBuf {
-    wiredtiger_root().join("dist/filelist")
-}
-
 fn config_template_path() -> PathBuf {
     wiredtiger_root().join("cmake/configs/wiredtiger_config.h.in")
 }
@@ -25,111 +21,6 @@ const VERSION_MAJOR: &str = "12";
 const VERSION_MINOR: &str = "0";
 const VERSION_PATCH: &str = "0";
 const VERSION_STRING: &str = "\"WiredTiger 12.0.0 (Rust build)\"";
-
-/// Determine the current CPU architecture filter
-fn get_arch_filter() -> &'static str {
-    let arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
-    match arch.as_str() {
-        "x86" | "x86_64" => "X86_HOST",
-        "aarch64" => "ARM64_HOST",
-        "powerpc" | "powerpc64" => "POWERPC_HOST",
-        "riscv64" => "RISCV64_HOST",
-        "loongarch64" => "LOONGARCH64_HOST",
-        "s390x" => "ZSERIES_HOST",
-        _ => "",
-    }
-}
-
-/// Determine the current OS filter
-fn get_os_filter() -> &'static str {
-    let os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
-    match os.as_str() {
-        "macos" | "ios" => "DARWIN_HOST",
-        "linux" | "android" => "LINUX_HOST",
-        "windows" => "WINDOWS_HOST",
-        _ => "",
-    }
-}
-
-/// Check if we're building for a POSIX-compatible system
-fn is_posix() -> bool {
-    let os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
-    matches!(
-        os.as_str(),
-        "macos" | "ios" | "linux" | "android" | "freebsd" | "openbsd" | "netbsd" | "dragonfly"
-    )
-}
-
-/// Check if a file with a given filter should be included in the build
-fn should_include_file(filter: &str, arch_filter: &str, os_filter: &str, is_posix: bool) -> bool {
-    if filter.is_empty() {
-        // No filter means always include
-        return true;
-    }
-
-    match filter {
-        // Architecture-specific filters
-        "X86_HOST" | "ARM64_HOST" | "POWERPC_HOST" | "RISCV64_HOST" | "LOONGARCH64_HOST"
-        | "ZSERIES_HOST" => filter == arch_filter,
-        // OS-specific filters
-        "DARWIN_HOST" | "LINUX_HOST" | "WINDOWS_HOST" => filter == os_filter,
-        // POSIX filter (includes both Darwin and Linux)
-        "POSIX_HOST" => is_posix,
-        // Unknown filter - exclude by default
-        _ => {
-            eprintln!("Warning: Unknown filter '{}', excluding file", filter);
-            false
-        }
-    }
-}
-
-/// Parse the filelist and return a list of source files applicable to the current platform
-fn parse_filelist(filelist_path: &Path, wt_root: &Path) -> Result<Vec<PathBuf>, String> {
-    let content = fs::read_to_string(filelist_path).map_err(|e| {
-        format!(
-            "Failed to read filelist '{}': {}",
-            filelist_path.display(),
-            e
-        )
-    })?;
-
-    let arch_filter = get_arch_filter();
-    let os_filter = get_os_filter();
-    let posix = is_posix();
-
-    let mut files = Vec::new();
-
-    for line in content.lines() {
-        let line = line.trim();
-
-        // Skip empty lines and comments
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-
-        // Split the line into file path and optional filter
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.is_empty() {
-            continue;
-        }
-
-        let file_path = parts[0];
-        let filter = parts.get(1).copied().unwrap_or("");
-
-        // Only include .c files (skip .S assembly files for now as cc crate handles them differently)
-        if !file_path.ends_with(".c") {
-            continue;
-        }
-
-        // Check if this file should be included based on the filter
-        if should_include_file(filter, arch_filter, os_filter, posix) {
-            let full_path = wt_root.join(file_path);
-            files.push(full_path);
-        }
-    }
-
-    Ok(files)
-}
 
 /// Get the set of enabled features based on the target platform
 fn get_enabled_features() -> HashMap<&'static str, bool> {
@@ -344,63 +235,37 @@ fn generate_wiredtiger_h(template_path: &Path, output_path: &Path) -> Result<(),
     Ok(())
 }
 
+fn gen_bindings(wiredtiger_h_output: &str) {
+    let bindings = bindgen::Builder::default()
+        .header(wiredtiger_h_output)
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
+        .clang_arg("-DBINDGEN_FILTER")
+        .generate()
+        .expect("Unable to generate bindings");
+
+    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
+    bindings
+        .write_to_file(out_path.join("bindings.rs"))
+        .expect("Couldn't write bindings!");
+}
+
 fn main() {
-    // Get paths
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));
-    let wt_root = wiredtiger_root();
-    let filelist = filelist_path();
     let config_template = config_template_path();
     let wt_h_template = wiredtiger_h_template_path();
 
-    // Generate wiredtiger_config.h (needed as include for C compilation)
+    // Generate wiredtiger_config.h
     let config_output = out_dir.join("wiredtiger_config.h");
     generate_config(&config_template, &config_output)
         .expect("Failed to generate wiredtiger_config.h");
 
-    // Generate wiredtiger.h (needed as include for C compilation)
+    // Generate wiredtiger.h
     let wiredtiger_h_output = out_dir.join("wiredtiger.h");
     generate_wiredtiger_h(&wt_h_template, &wiredtiger_h_output)
         .expect("Failed to generate wiredtiger.h");
 
-    // Parse the filelist
-    let files = parse_filelist(&filelist, &wt_root).expect("Failed to parse WiredTiger filelist");
+    gen_bindings(wiredtiger_h_output.as_path().to_str().unwrap());
 
-    if files.is_empty() {
-        panic!("No source files found in filelist");
-    }
-
-    // Build the WiredTiger library
-    let mut build = cc::Build::new();
-
-    // TODO - use build.flag_if_supported
-    build.flags(["-Wno-unused-function"]);
-
-    // Add include paths
-    build.include(&out_dir); // For generated wiredtiger_config.h
-    build.include(wt_root.join("src/include"));
-
-    let os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
-
-    let is_darwin = os == "macos" || os == "ios";
-
-    if is_darwin {
-        build.include(wt_root.join("oss/apple"));
-    }
-
-    // Add all source files
-    for file in &files {
-        if file.exists() {
-            build.file(file);
-        } else {
-            eprintln!("Warning: Source file not found: {}", file.display());
-        }
-    }
-
-    // Compile the library
-    build.compile("wt");
-
-    // Tell cargo to rerun the build script if these files change
-    println!("cargo:rerun-if-changed={}", filelist.display());
     println!("cargo:rerun-if-changed={}", config_template.display());
     println!("cargo:rerun-if-changed={}", wt_h_template.display());
 }

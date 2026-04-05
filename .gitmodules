@@ -1,4 +1,4 @@
-[submodule "wt-sys/src/wiredtiger"]
-	path = wt-sys/src/wiredtiger
+[submodule "vendor/wiredtiger"]
+	path = vendor/wiredtiger
 	url = https://github.com/wiredtiger/wiredtiger
 	branch = develop

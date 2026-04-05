@@ -378,12 +378,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "wt-sys"
+name = "wt-bindings"
 version = "0.1.0"
 dependencies = [
  "bindgen",
- "cc",
  "libc",
+]
+
+[[package]]
+name = "wt-sys"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "wt-bindings",
 ]
 
 [[package]]
