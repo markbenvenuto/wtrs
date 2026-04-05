@@ -475,7 +475,7 @@ unsafe extern "C" fn wt_open_handle(
             page_log,
             plh_put: Some(wt_plh_put),
             plh_get: Some(wt_plh_get),
-            plh_get_page_ids: Some(wt_plh_get_page_ids),
+            plh_get_page_ids: None, //Some(wt_plh_get_page_ids),
             plh_discard: Some(wt_plh_discard),
             plh_close: Some(wt_plh_close),
             plh_cache_put: Some(wt_plh_cache_put),
