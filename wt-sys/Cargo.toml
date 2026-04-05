@@ -8,3 +8,4 @@ wt-bindings = { path = "../wt-bindings" }
 
 [build-dependencies]
 cc = "1.2.52"
+wt-build = { path = "../wt-build" }

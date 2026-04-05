@@ -383,7 +383,12 @@ version = "0.1.0"
 dependencies = [
  "bindgen",
  "libc",
+ "wt-build",
 ]
+
+[[package]]
+name = "wt-build"
+version = "0.1.0"
 
 [[package]]
 name = "wt-sys"
@@ -391,6 +396,7 @@ version = "0.1.0"
 dependencies = [
  "cc",
  "wt-bindings",
+ "wt-build",
 ]
 
 [[package]]

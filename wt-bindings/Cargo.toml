@@ -8,3 +8,4 @@ libc = "0.2.180"
 
 [build-dependencies]
 bindgen = "0.71.0"
+wt-build = { path = "../wt-build" }
