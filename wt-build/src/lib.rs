@@ -225,7 +225,16 @@ pub fn process_cmakedefine(line: &str, features: &HashMap<&str, bool>) -> String
     let is_enabled = features.get(symbol).copied().unwrap_or(false);
 
     match value {
-        Some("0") => format!("#define {} 0", symbol),
+        Some("0") => {
+            // CMake semantics: #cmakedefine VAR 0 generates /* #undef VAR */ when VAR is disabled,
+            // not #define VAR 0. Without this fix, `defined(HAVE_RCPC)` would be true on
+            // non-ARM platforms, causing ARM-specific assembly to be emitted.
+            if is_enabled {
+                format!("#define {} 0", symbol)
+            } else {
+                format!("/* #undef {} */", symbol)
+            }
+        }
         Some("1") => {
             if is_enabled {
                 format!("#define {} 1", symbol)

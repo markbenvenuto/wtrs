@@ -40,6 +40,11 @@ fn main() {
         build.include(wt_root.join("oss/apple"));
     }
 
+    // Linux requires _GNU_SOURCE for GNU extension functions (fallocate, sync_file_range, etc.)
+    if os == "linux" || os == "android" {
+        build.define("_GNU_SOURCE", None);
+    }
+
     for file in &files {
         if file.exists() {
             build.file(file);
