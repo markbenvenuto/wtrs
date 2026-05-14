@@ -393,7 +393,11 @@ impl Connection {
         let ret = unsafe {
             let conn = &*self.inner;
             match conn.query_timestamp {
-                Some(f) => f(self.inner, buf.as_mut_ptr(), config_ptr(&config_cstr)),
+                Some(f) => f(
+                    self.inner,
+                    buf.as_mut_ptr() as *mut u8,
+                    config_ptr(&config_cstr),
+                ),
                 None => {
                     return Err(Error {
                         code: -1,
@@ -1373,7 +1377,11 @@ impl<'conn> Session<'conn> {
         let ret = unsafe {
             let session = &*self.inner;
             match session.query_timestamp {
-                Some(f) => f(self.inner, buf.as_mut_ptr(), config_ptr(&config_cstr)),
+                Some(f) => f(
+                    self.inner,
+                    buf.as_mut_ptr() as *mut u8,
+                    config_ptr(&config_cstr),
+                ),
                 None => {
                     return Err(Error {
                         code: -1,
@@ -1384,7 +1392,7 @@ impl<'conn> Session<'conn> {
         };
 
         check_error(ret)?;
-        let cstr = unsafe { CStr::from_ptr(buf.as_ptr()) };
+        let cstr = unsafe { CStr::from_ptr(buf.as_ptr() as *const u8) };
         Ok(cstr.to_string_lossy().into_owned())
     }
 

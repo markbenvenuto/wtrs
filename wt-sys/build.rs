@@ -36,6 +36,8 @@ fn main() {
     build.include(wt_root.join("src/include"));
 
     let os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    let arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
+
     if os == "macos" || os == "ios" {
         build.include(wt_root.join("oss/apple"));
     }
@@ -43,6 +45,11 @@ fn main() {
     // Linux requires _GNU_SOURCE for GNU extension functions (fallocate, sync_file_range, etc.)
     if os == "linux" || os == "android" {
         build.define("_GNU_SOURCE", None);
+    }
+
+    if os == "linux" && arch == "aarch64" {
+        // Build with CRC32 support enabled
+        build.flags(["-march=armv8-a+crc"]);
     }
 
     for file in &files {
