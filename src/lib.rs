@@ -386,30 +386,7 @@ impl Connection {
         };
         check_error(ret)
     }
-    /// Query the global transaction timestamp state.
-    pub fn query_timestamp(&self, config: Option<&str>) -> Result<String> {
-        let config_cstr = config_to_cstring(config)?;
-        let mut buf = [0i8; 17]; // Hex-encoded 8-byte timestamp + null
-        let ret = unsafe {
-            let conn = &*self.inner;
-            match conn.query_timestamp {
-                Some(f) => f(
-                    self.inner,
-                    buf.as_mut_ptr() as *mut u8,
-                    config_ptr(&config_cstr),
-                ),
-                None => {
-                    return Err(Error {
-                        code: -1,
-                        message: "query_timestamp function not available".to_string(),
-                    });
-                }
-            }
-        };
-        check_error(ret)?;
-        let cstr = unsafe { CStr::from_ptr(buf.as_ptr()) };
-        Ok(cstr.to_string_lossy().into_owned())
-    }
+
     /// Set a global transaction timestamp.
     pub fn set_timestamp(&self, config: &str) -> Result<()> {
         let config_cstr = CString::new(config).map_err(|_| Error {
@@ -1367,33 +1344,6 @@ impl<'conn> Session<'conn> {
         };
 
         check_error(ret)
-    }
-
-    /// Query the session's transaction timestamp state.
-    pub fn query_timestamp(&self, config: Option<&str>) -> Result<String> {
-        let config_cstr = config_to_cstring(config)?;
-        let mut buf = [0i8; 17];
-
-        let ret = unsafe {
-            let session = &*self.inner;
-            match session.query_timestamp {
-                Some(f) => f(
-                    self.inner,
-                    buf.as_mut_ptr() as *mut u8,
-                    config_ptr(&config_cstr),
-                ),
-                None => {
-                    return Err(Error {
-                        code: -1,
-                        message: "query_timestamp function not available".to_string(),
-                    });
-                }
-            }
-        };
-
-        check_error(ret)?;
-        let cstr = unsafe { CStr::from_ptr(buf.as_ptr() as *const u8) };
-        Ok(cstr.to_string_lossy().into_owned())
     }
 
     /// Set a timestamp on a transaction.
